@@ -331,7 +331,9 @@ func TestTrustProxy(t *testing.T) {
 		want  string
 	}{
 		{"off ignores header", false, "198.51.100.1", "192.0.2.1"},
-		{"on takes first hop", true, "198.51.100.1, 203.0.113.7", "198.51.100.1"},
+		{"on takes the hop the proxy added, not one the client sent", true, "198.51.100.1, 203.0.113.7", "203.0.113.7"},
+		{"on ipv6 limited per /64", true, "2001:db8:1:2:aaaa::1", "2001:db8:1:2::/64"},
+		{"on ipv4 in ipv6 stays ipv4", true, "::ffff:203.0.113.7", "203.0.113.7"},
 		{"on garbage falls back", true, "x/../y", "192.0.2.1"},
 		{"on no header", true, "", "192.0.2.1"},
 	}

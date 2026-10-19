@@ -40,11 +40,13 @@ func (a *app) allow(ctx context.Context, kind, ip string) (ok bool, retryAfter t
 	return false, ttl, nil
 }
 
+// clientIP is the address requests are counted against: an IPv6 client by its /64, since one host usually holds the whole prefix.
+// Behind a trusted proxy it is the last X-Forwarded-For hop, the one the proxy added; earlier hops come from the client.
 func (a *app) clientIP(r *http.Request) string {
 	if a.cfg.trustProxy {
-		first, _, _ := strings.Cut(r.Header.Get("X-Forwarded-For"), ",")
-		if ip, err := netip.ParseAddr(strings.TrimSpace(first)); err == nil {
-			return ip.String()
+		hops := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+		if ip, err := netip.ParseAddr(strings.TrimSpace(hops[len(hops)-1])); err == nil {
+			return limitKey(ip)
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -52,7 +54,15 @@ func (a *app) clientIP(r *http.Request) string {
 		host = r.RemoteAddr
 	}
 	if ip, err := netip.ParseAddr(host); err == nil {
-		return ip.String()
+		return limitKey(ip)
 	}
 	return "unknown"
+}
+
+func limitKey(ip netip.Addr) string {
+	ip = ip.Unmap()
+	if ip.Is6() {
+		return netip.PrefixFrom(ip, 64).Masked().String()
+	}
+	return ip.String()
 }

@@ -30,7 +30,7 @@ The answer holds the short URL and a management URL. The management URL is shown
 | `--admin-token` | | admin password; `SHORTENER_ADMIN_TOKEN` works too; the admin pages answer 404 when empty |
 | `--safe-browsing-key` | | Google Safe Browsing key; `SAFE_BROWSING_KEY` works too; links are not checked when empty |
 | `--create-limit` | `20` | creations per IP per hour, and reports per IP per hour |
-| `--trust-proxy` | `false` | take the client IP from the first `X-Forwarded-For` hop instead of the socket; only turn it on behind a proxy that sets that header itself |
+| `--trust-proxy` | `false` | take the client IP from the last `X-Forwarded-For` hop (the one your proxy added) instead of the socket; only turn it on behind a proxy. IPv6 clients are limited per /64 |
 
 ## Routes
 
