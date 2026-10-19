@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,11 +19,29 @@ import (
 
 const testBase = "http://short.test"
 
+type syncBuf struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuf) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuf) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
 type env struct {
-	a   *app
-	kv  *fakeKV
-	clk *clock
-	h   http.Handler
+	a    *app
+	kv   *fakeKV
+	clk  *clock
+	h    http.Handler
+	logs *syncBuf
 }
 
 func newEnv(t *testing.T, mods ...func(*config)) *env {
@@ -33,12 +52,13 @@ func newEnv(t *testing.T, mods ...func(*config)) *env {
 	for _, m := range mods {
 		m(&cfg)
 	}
-	a, err := newApp(cfg, kv, discardLogger())
+	logs := &syncBuf{}
+	a, err := newApp(cfg, kv, slog.New(slog.NewTextHandler(logs, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	a.now = clk.Now
-	return &env{a: a, kv: kv, clk: clk, h: a.routes()}
+	return &env{a: a, kv: kv, clk: clk, h: a.routes(), logs: logs}
 }
 
 func (e *env) do(method, path string, body string, hdr ...string) *httptest.ResponseRecorder {
@@ -285,6 +305,9 @@ func TestRateLimit(t *testing.T) {
 	if w := e.createRaw("https://example.com/6", ""); w.Code != http.StatusCreated {
 		t.Fatalf("new window still limited: status %d", w.Code)
 	}
+	if got := e.kv.keys("ratelimit/create/192.0.2.1/"); len(got) != 1 {
+		t.Fatalf("window keys must expire with their window, have %v", got)
+	}
 }
 
 func TestReportRateLimited(t *testing.T) {
@@ -412,14 +435,14 @@ func TestSafeBrowsing(t *testing.T) {
 		if got := e.kv.keys("link/"); len(got) != 0 {
 			t.Fatalf("link stored while the check was down: %v", got)
 		}
-		if strings.Contains(w.Body.String(), "k3y") {
-			t.Fatal("api key leaked into the response")
-		}
 	})
 	t.Run("unreachable fails closed", func(t *testing.T) {
 		e := newEnv(t, func(c *config) { c.sbKey, c.sbEndpoint = "k3y", "http://127.0.0.1:1" })
 		if w := e.createRaw("https://fine.example/", ""); w.Code != http.StatusServiceUnavailable {
 			t.Fatalf("status %d, want 503", w.Code)
+		}
+		if logs := e.logs.String(); !strings.Contains(logs, "safe browsing lookup") || strings.Contains(logs, "k3y") {
+			t.Fatalf("the failure must be logged without the api key: %s", logs)
 		}
 	})
 	t.Run("no key skips the call", func(t *testing.T) {
@@ -687,6 +710,11 @@ func TestLifecycleOnFake(t *testing.T) {
 	base, _ := url.Parse(srv.URL)
 	e.a.base = base
 	lifecycle(t, srv.URL)
+	for _, p := range []string{"link/", "clicks/", "reports/"} {
+		if got := e.kv.keys(p); len(got) != 0 {
+			t.Fatalf("delete left %v behind", got)
+		}
+	}
 }
 
 // lifecycle drives create, visit, manage and delete over real HTTP
