@@ -4,13 +4,37 @@ A small URL shortener that uses [godis](https://github.com/divizn/godis) as its 
 
 The module requires `github.com/divizn/godis v0.1.0`, which is not tagged yet, so it only builds with a `go.work` that points at a godis checkout (and CI cannot build until the tag exists). Do not run `go mod tidy` before then.
 
-## Run
+## Run locally
 
-Start a godis cluster (see the godis README), then:
+You need Go 1.25 or newer and a running godis cluster. Both ways below start 3 godis nodes with clients on `localhost:8081`-`8083`, which is the shortener's default `--godis`, so the shortener itself needs no flags.
+
+With Docker, from a godis clone:
 
 ```
-go run . --godis localhost:8081,localhost:8082,localhost:8083 --base-url http://localhost:8090
+git clone --recurse-submodules https://github.com/divizn/godis
+cd godis
+docker compose up -d --build
+cd examples/shortener
+go run .
 ```
+
+`docker compose down -v`, from the godis directory, stops the cluster and deletes its data.
+
+Without Docker, start each node in its own terminal from the godis clone, then the shortener in a fourth:
+
+```
+C=node-1=localhost:7001/localhost:8081,node-2=localhost:7002/localhost:8082,node-3=localhost:7003/localhost:8083
+go run ./cmd/server --id=node-1 --port=8081 --raft-port=7001 --metrics-port=2112 --data-dir=data/node-1 --cluster=$C
+go run ./cmd/server --id=node-2 --port=8082 --raft-port=7002 --metrics-port=2113 --data-dir=data/node-2 --cluster=$C
+go run ./cmd/server --id=node-3 --port=8083 --raft-port=7003 --metrics-port=2114 --data-dir=data/node-3 --cluster=$C
+```
+
+```
+cd examples/shortener
+go run .
+```
+
+Safe Browsing is off unless you pass a key (`SAFE_BROWSING_KEY`), and the admin page is off unless you set `SHORTENER_ADMIN_TOKEN` (log in with any user name and the token as the password).
 
 Open http://localhost:8090, or from a shell:
 
