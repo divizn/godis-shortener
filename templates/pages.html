@@ -1,0 +1,99 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{.}} | godis-shortener</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+{{end}}
+
+{{define "foot"}}</main>
+</body>
+</html>
+{{end}}
+
+{{define "index"}}{{template "head" "Shorten a link"}}
+<h1>Shorten a link</h1>
+<form method="post" action="/links">
+<label for="url">Long URL</label>
+<input id="url" name="url" type="url" required maxlength="2048" placeholder="https://example.com/a/long/path">
+<label for="expires_in">Expires</label>
+<select id="expires_in" name="expires_in">
+<option value="">never</option>
+<option value="1h">in 1 hour</option>
+<option value="24h">in 1 day</option>
+<option value="168h">in 7 days</option>
+<option value="720h">in 30 days</option>
+</select>
+<button type="submit">Shorten</button>
+</form>
+{{template "foot"}}{{end}}
+
+{{define "created"}}{{template "head" "Link created"}}
+<h1>Link created</h1>
+<p>Short link</p>
+<p><a id="short" href="{{.ShortURL}}">{{.ShortURL}}</a></p>
+{{if .ExpiresAt}}<p>Expires {{.ExpiresAt}}</p>{{end}}
+<p>Management link, shown only once. Keep it to see clicks or delete the link.</p>
+<p><a id="manage" href="{{.ManageURL}}">{{.ManageURL}}</a></p>
+{{template "foot"}}{{end}}
+
+{{define "preview"}}{{template "head" "Leaving this site"}}
+<h1>You are about to leave</h1>
+<p>This short link goes to <strong>{{.Host}}</strong></p>
+<p>Full address:</p>
+<p><code>{{.URL}}</code></p>
+<p><a id="continue" class="button" href="{{.URL}}" rel="noreferrer noopener">Continue</a></p>
+<form method="post" action="/{{.Code}}/report">
+<button type="submit" class="quiet">Report this link</button>
+</form>
+{{template "foot"}}{{end}}
+
+{{define "reported"}}{{template "head" "Reported"}}
+<h1>Thanks</h1>
+<p>The link was reported and will be reviewed.</p>
+{{template "foot"}}{{end}}
+
+{{define "manage"}}{{template "head" "Manage link"}}
+<h1>Manage link</h1>
+<dl>
+<dt>Short link</dt><dd><a href="{{.Short}}">{{.Short}}</a></dd>
+<dt>Destination</dt><dd><code>{{.URL}}</code></dd>
+<dt>Created</dt><dd>{{.Created}}</dd>
+<dt>Expires</dt><dd>{{.Expires}}</dd>
+<dt>Clicks</dt><dd id="clicks">{{.Clicks}}</dd>
+<dt>Reports</dt><dd id="reports">{{.Reports}}</dd>
+{{if .Removed}}<dt>Status</dt><dd>taken down</dd>{{end}}
+</dl>
+<form method="post" action="/m/{{.Code}}/{{.Secret}}/delete">
+<button type="submit" class="danger">Delete link</button>
+</form>
+{{template "foot"}}{{end}}
+
+{{define "deleted"}}{{template "head" "Deleted"}}
+<h1>Link deleted</h1>
+<p>The link and its counters are gone.</p>
+{{template "foot"}}{{end}}
+
+{{define "admin"}}{{template "head" "Admin"}}
+<h1>Reported links</h1>
+{{if .}}
+<table>
+<tr><th>Code</th><th>Destination</th><th>Reports</th><th></th></tr>
+{{range .}}<tr>
+<td>{{.Code}}</td><td><code>{{.URL}}</code></td><td>{{.Reports}}</td>
+<td>{{if .Removed}}taken down{{else}}<form method="post" action="/admin/takedown/{{.Code}}"><button type="submit" class="danger">Take down</button></form>{{end}}</td>
+</tr>{{end}}
+</table>
+{{else}}<p>Nothing reported.</p>{{end}}
+{{template "foot"}}{{end}}
+
+{{define "error"}}{{template "head" .Title}}
+<h1>{{.Title}}</h1>
+<p>{{.Msg}}</p>
+<p><a href="/">Home</a></p>
+{{template "foot"}}{{end}}
